@@ -3,6 +3,7 @@ import cors from "cors";
 import { createServer } from "http";
 import { Server } from "socket.io";
 import { getAllVehicles, updateVehicle, isValidCoordinates } from "./vehicleStore.js";
+import { addComplaint, resolveComplaint, getAllComplaints } from "./complaintStore.js";
 
 const app = express();
 app.use(cors());
@@ -10,7 +11,7 @@ app.use(express.json());
 
 const httpServer = createServer(app);
 const io = new Server(httpServer, {
-  cors: { origin: "*" }, // tighten this to your Netlify domain after deploying
+  cors: { origin: "*" }, // tighten this to your frontend domain after deploying
 });
 
 // --- REST endpoints ---
@@ -32,10 +33,32 @@ app.post("/api/telemetry/location", (req, res) => {
   res.json({ status: "success", vehicle: updated });
 });
 
+app.get("/api/complaints", (_req, res) => {
+  res.json({ status: "success", complaints: getAllComplaints() });
+});
+
+app.post("/api/complaints", (req, res) => {
+  const { citizenName, location, details, vehicleId } = req.body || {};
+  if (!details || !details.trim()) {
+    return res.status(400).json({ status: "error", message: "Complaint details are required" });
+  }
+  const complaint = addComplaint({ citizenName, location, details, vehicleId });
+  io.emit("complaints:update", getAllComplaints());
+  res.json({ status: "success", complaint });
+});
+
+app.patch("/api/complaints/:id/resolve", (req, res) => {
+  const updated = resolveComplaint(req.params.id);
+  if (!updated) return res.status(404).json({ status: "error", message: "Complaint not found" });
+  io.emit("complaints:update", getAllComplaints());
+  res.json({ status: "success", complaint: updated });
+});
+
 // --- Real-time layer ---
 io.on("connection", (socket) => {
-  // Send current fleet snapshot immediately on connect
+  // Send current snapshots immediately on connect
   socket.emit("vehicles:init", getAllVehicles());
+  socket.emit("complaints:init", getAllComplaints());
 
   // Driver page sends its live GPS here
   socket.on("driver:update", (payload) => {
@@ -47,6 +70,24 @@ io.on("connection", (socket) => {
       ...(status && { status }),
     });
     if (updated) io.emit("vehicles:update", getAllVehicles());
+  });
+
+  // Citizen <-> Driver live text message relay (scoped by vehicleId)
+  socket.on("message:send", (payload) => {
+    const { vehicleId, from, text } = payload || {};
+    if (!vehicleId || !text || !text.trim()) return;
+    io.emit("message:new", { vehicleId, from: from || "citizen", text: text.trim(), at: Date.now() });
+  });
+
+  // Citizen submits a complaint via socket too (alternative to REST)
+  socket.on("complaint:submit", (payload) => {
+    const complaint = addComplaint(payload || {});
+    io.emit("complaints:update", getAllComplaints());
+  });
+
+  socket.on("complaint:resolve", (id) => {
+    const updated = resolveComplaint(id);
+    if (updated) io.emit("complaints:update", getAllComplaints());
   });
 
   // Citizen/admin can request a fresh snapshot anytime

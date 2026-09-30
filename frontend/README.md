@@ -1,8 +1,8 @@
-# EcoTrack (Web Frontend)
+# EcoTrack (Web Prototype)
 
-A municipal waste-vehicle tracking frontend with a live map, nearest-vehicle
-sorting, status filters, driver GPS sharing, and a call-driver action. The
-production build connects to the EcoTrack Render backend through Socket.io.
+A working prototype of a municipal waste-vehicle tracking website: live map,
+simulated GPS movement, nearest-vehicle sorting, status filters, and a
+call-driver action. Built with mock data — no backend, no paid APIs.
 
 ## Tech stack
 
@@ -28,15 +28,15 @@ npm run build
 npm run preview   # serve the built dist/ folder locally
 ```
 
-## Runtime behavior
+## What's real vs. simulated
 
 | Feature | This prototype | Full spec (EcoTrack PRD) |
 |---|---|---|
-| Vehicle locations | Live fleet snapshot and Socket.io updates | Real GPS from driver devices |
+| Vehicle locations | 5 mock vehicles, randomly nudged every 4s | Real GPS from driver devices via MQTT |
 | Distance/ETA | Haversine formula, client-side | Same formula + OSRM routing engine |
 | Call driver | Opens device dialer via `tel:` link | Twilio/Exotel masked VoIP bridge |
 | Alerts | None yet | Geofence push notifications (FCM) |
-| Backend | Node.js + Socket.io on Render | Persistent production fleet storage |
+| Backend | None — data folder only | FastAPI + PostgreSQL/PostGIS + Redis |
 
 ## Folder structure
 
@@ -52,6 +52,9 @@ src/
 
 ## Next steps to go from prototype -> real system
 
-1. Add Twilio/Exotel only when you actually need masked calling — needs a
+1. Replace `data/mockVehicles.ts` with a real API call in `services/`.
+2. Add a backend (FastAPI/Node) with a `/telemetry` endpoint drivers post to.
+3. Swap the simulation interval in `useVehicles` for a WebSocket subscription.
+4. Add Twilio/Exotel only when you actually need masked calling — needs a
    paid account and a small backend endpoint to bridge two numbers.
-2. Add push notifications (Firebase) once there's a backend to trigger them.
+5. Add push notifications (Firebase) once there's a backend to trigger them.
