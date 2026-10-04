@@ -27,12 +27,22 @@ export function getBrowserLocation(
   onError: (err: string) => void
 ) {
   if (!navigator.geolocation) {
-    onError("Geolocation not supported by this browser");
+    onError("This browser does not support location access.");
     return;
   }
   navigator.geolocation.getCurrentPosition(
     (pos) => onSuccess({ lat: pos.coords.latitude, lng: pos.coords.longitude }),
-    (err) => onError(err.message),
-    { enableHighAccuracy: true, timeout: 5000 }
+    (err) => {
+      const message =
+        err.code === err.PERMISSION_DENIED
+          ? "Location permission was denied."
+          : err.code === err.POSITION_UNAVAILABLE
+            ? "Your device could not determine its location."
+            : err.code === err.TIMEOUT
+              ? "The location request timed out."
+              : err.message;
+      onError(message);
+    },
+    { enableHighAccuracy: true, timeout: 5000 },
   );
 }

@@ -9,17 +9,41 @@ import { formatTimeAgo, maskPhone } from "../utils/formatters";
 export default function AdminPage() {
   const [vehicles, setVehicles] = useState<Vehicle[]>([]);
   const [connected, setConnected] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
   const { complaints, resolveComplaint } = useComplaints();
+
+  const handleResolve = async (id: string) => {
+    setActionError(null);
+    try {
+      await resolveComplaint(id);
+    } catch (err) {
+      setActionError(
+        err instanceof Error ? err.message : "Could not update the complaint.",
+      );
+    }
+  };
 
   useEffect(() => {
     const socket = getSocket();
-    socket.emit("vehicles:request");
     const onData = (data: Vehicle[]) => setVehicles(data);
-    socket.on("connect", () => setConnected(true));
-    socket.on("disconnect", () => setConnected(false));
+    const onConnect = () => {
+      setConnected(true);
+      socket.emit("vehicles:request");
+    };
+    const onDisconnect = () => setConnected(false);
+    socket.on("connect", onConnect);
+    socket.on("disconnect", onDisconnect);
     socket.on("vehicles:init", onData);
     socket.on("vehicles:update", onData);
+    const connectionCheck = window.setTimeout(
+      () => setConnected(socket.connected),
+      0,
+    );
+    socket.emit("vehicles:request");
     return () => {
+      window.clearTimeout(connectionCheck);
+      socket.off("connect", onConnect);
+      socket.off("disconnect", onDisconnect);
       socket.off("vehicles:init", onData);
       socket.off("vehicles:update", onData);
     };
@@ -37,23 +61,36 @@ export default function AdminPage() {
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <div className="lg:col-span-2 bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
           <div className="flex justify-between items-center mb-3">
-            <h2 className="text-lg font-bold text-slate-800">🏢 Ward Fleet Overview</h2>
-            <span className={`text-xs px-2 py-1 rounded font-semibold ${connected ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}>
+            <h2 className="text-lg font-bold text-slate-800">
+              🏢 Ward Fleet Overview
+            </h2>
+            <span
+              className={`text-xs px-2 py-1 rounded font-semibold ${connected ? "bg-emerald-100 text-emerald-700" : "bg-amber-100 text-amber-700"}`}
+            >
               {connected ? "● Live" : "○ Connecting..."}
             </span>
           </div>
           <div className="h-[350px] rounded-xl overflow-hidden">
-            <MapView vehicles={vehicles} userLocation={null} selectedVehicleId={null} onSelect={() => {}} />
+            <MapView
+              vehicles={vehicles}
+              userLocation={null}
+              selectedVehicleId={null}
+              onSelect={() => {}}
+            />
           </div>
         </div>
 
         <div className="space-y-4">
           <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-            <h3 className="text-md font-bold mb-3 border-b pb-2">Fleet Status</h3>
+            <h3 className="text-md font-bold mb-3 border-b pb-2">
+              Fleet Status
+            </h3>
             <div className="grid grid-cols-2 gap-2 text-center">
               {statuses.map((s) => (
                 <div key={s} className="bg-slate-50 p-2.5 rounded-xl border">
-                  <p className="text-lg font-bold text-emerald-600">{counts[s] || 0}</p>
+                  <p className="text-lg font-bold text-emerald-600">
+                    {counts[s] || 0}
+                  </p>
                   <p className="text-[10px] text-slate-500">{s}</p>
                 </div>
               ))}
@@ -67,7 +104,14 @@ export default function AdminPage() {
       </div>
 
       <div className="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
-        <h3 className="text-md font-bold text-slate-800 mb-4">Citizen Complaints & Grievance Portal</h3>
+        <h3 className="text-md font-bold text-slate-800 mb-4">
+          Citizen Complaints & Grievance Portal
+        </h3>
+        {actionError && (
+          <p role="alert" className="mb-3 text-sm text-red-600">
+            {actionError}
+          </p>
+        )}
         <div className="overflow-x-auto">
           <table className="w-full text-left text-xs border-collapse">
             <thead>
@@ -82,7 +126,11 @@ export default function AdminPage() {
             </thead>
             <tbody className="divide-y divide-slate-100">
               {complaints.length === 0 && (
-                <tr><td colSpan={6} className="p-4 text-center text-slate-400">No complaints yet.</td></tr>
+                <tr>
+                  <td colSpan={6} className="p-4 text-center text-slate-400">
+                    No complaints yet.
+                  </td>
+                </tr>
               )}
               {complaints.map((c) => (
                 <tr key={c.id}>
@@ -91,9 +139,13 @@ export default function AdminPage() {
                   <td className="p-3">{c.location}</td>
                   <td className="p-3">{c.details}</td>
                   <td className="p-3">
-                    <span className={`px-2 py-0.5 rounded-full font-semibold ${
-                      c.status === "RESOLVED" ? "bg-emerald-100 text-emerald-700" : "bg-red-100 text-red-700"
-                    }`}>
+                    <span
+                      className={`px-2 py-0.5 rounded-full font-semibold ${
+                        c.status === "RESOLVED"
+                          ? "bg-emerald-100 text-emerald-700"
+                          : "bg-red-100 text-red-700"
+                      }`}
+                    >
                       {c.status}
                     </span>
                   </td>
@@ -102,7 +154,7 @@ export default function AdminPage() {
                       <span className="text-slate-400">Completed</span>
                     ) : (
                       <button
-                        onClick={() => resolveComplaint(c.id)}
+                        onClick={() => void handleResolve(c.id)}
                         className="bg-emerald-600 text-white px-2 py-1 rounded hover:bg-emerald-700"
                       >
                         Mark Resolved
@@ -133,10 +185,23 @@ export default function AdminPage() {
               {vehicles.map((v) => (
                 <tr key={v.id}>
                   <td className="p-3">{v.vehicleNumber}</td>
-                  <td className="p-3">{v.driverName} <span className="text-slate-400">({maskPhone(v.driverPhone)})</span></td>
+                  <td className="p-3">
+                    {v.driverName}{" "}
+                    <span className="text-slate-400">
+                      (
+                      {v.driverPhone
+                        ? maskPhone(v.driverPhone)
+                        : "phone not shared"}
+                      )
+                    </span>
+                  </td>
                   <td className="p-3">{v.areaName}</td>
-                  <td className="p-3"><StatusBadge status={v.status} /></td>
-                  <td className="p-3 text-slate-400">{formatTimeAgo(v.lastUpdated)}</td>
+                  <td className="p-3">
+                    <StatusBadge status={v.status} />
+                  </td>
+                  <td className="p-3 text-slate-400">
+                    {formatTimeAgo(v.lastUpdated)}
+                  </td>
                 </tr>
               ))}
             </tbody>

@@ -6,17 +6,29 @@ import { getBrowserLocation } from "../services/locationService";
 export function useLocation() {
   const [userLocation, setUserLocation] = useState<UserLocation | null>(null);
   const [usingMock, setUsingMock] = useState(false);
+  const [locationError, setLocationError] = useState<string | null>(null);
 
   useEffect(() => {
+    let cancelled = false;
     getBrowserLocation(
-      (coords) => setUserLocation(coords),
-      () => {
-        // Fallback to mock location so the app is usable in dev / no-permission cases
+      (coords) => {
+        if (cancelled) return;
+        setUserLocation(coords);
+        setUsingMock(false);
+        setLocationError(null);
+      },
+      (message) => {
+        if (cancelled) return;
+        setLocationError(message);
+        // Keep the app usable without GPS, while explicitly identifying the sample location.
         setUserLocation(mockUserLocation);
         setUsingMock(true);
-      }
+      },
     );
+    return () => {
+      cancelled = true;
+    };
   }, []);
 
-  return { userLocation, usingMock };
+  return { userLocation, usingMock, locationError };
 }

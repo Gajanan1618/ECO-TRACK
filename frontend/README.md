@@ -9,20 +9,22 @@ Node.js backend over Socket.IO and broadcast to connected viewers.
 
 - Vite + React + TypeScript
 - Leaflet + react-leaflet (OpenStreetMap tiles — free, no API key)
-- Plain CSS (no framework)
+- Tailwind utility classes loaded through the CDN script in `index.html`
 
 ## Run it locally
 
-Start the backend in one terminal:
+From the `eco-track` directory, start the backend in one terminal:
 
 ```bash
+cd backend
 npm install
 npm run dev
 ```
 
-Start the frontend in a second terminal:
+In a second terminal, from the `eco-track` directory, start the frontend:
 
 ```bash
+cd frontend
 npm install
 npm run dev
 ```
@@ -44,7 +46,7 @@ npm run preview   # serve the built dist/ folder locally
 ## What's real vs. simulated
 
 | Feature | This prototype | Production considerations |
-|---|---|---|
+| --- | --- | --- |
 | Vehicle locations | Driver browser GPS → Socket.IO → live map updates | Authenticate driver/device identities and persist telemetry |
 | Distance | Haversine formula, client-side | Add road routing/ETA if needed |
 | Driver location | Explicit start/stop controls; status and GPS accuracy shown | Add retention policy and access controls for sensitive location data |
@@ -52,7 +54,7 @@ npm run preview   # serve the built dist/ folder locally
 
 ## Folder structure
 
-```
+```text
 src/
 ├── components/   presentation-only UI (VehicleCard, MapView, StatusBadge...)
 ├── data/         mock vehicle data
@@ -66,8 +68,15 @@ src/
 
 - The backend starts with sample vehicle records and stores updates in memory;
    restarting it resets locations and complaints.
-- The current demo does not authenticate driver sockets. Do not expose it as a
-   production tracking service until driver authorization, origin restrictions,
-   and persistent storage are added.
+- The current demo has no authentication or role/vehicle authorization for
+   telemetry or complaint-management writes. Do not expose it as a production
+   tracking service until those controls, origin restrictions, and persistent
+   storage are added. CORS/origin restrictions alone do not authenticate clients.
+- Public vehicle payloads omit driver phone numbers. The call action therefore
+   remains unavailable until a protected contact flow is implemented.
+- Set `CORS_ORIGINS` on the backend to a comma-separated list of allowed
+   frontend origins when deploying (the default only allows `localhost:5173`).
 - Browser GPS sharing runs only while the Driver Panel is open and sharing is
    enabled. Mobile browsers may suspend tracking when the page is backgrounded.
+- Tailwind is loaded from a CDN for this prototype; replace it with a bundled
+   Tailwind build before production deployment.

@@ -1,6 +1,6 @@
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import L from "leaflet";
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import type { Vehicle, UserLocation } from "../types/vehicle";
 
 // Fix default marker icons (Vite doesn't bundle Leaflet's default image paths correctly)
@@ -35,10 +35,24 @@ interface Props {
 
 function RecenterOnSelect({ vehicles, selectedVehicleId }: { vehicles: Vehicle[]; selectedVehicleId: string | null }) {
   const map = useMap();
+  const previousVehicleId = useRef<string | null>(null);
+  const selectedVehicle = vehicles.find(
+    (vehicle) => vehicle.id === selectedVehicleId,
+  );
+  const selectedLatitude = selectedVehicle?.coordinates.lat;
+  const selectedLongitude = selectedVehicle?.coordinates.lng;
+
   useEffect(() => {
-    const v = vehicles.find((x) => x.id === selectedVehicleId);
-    if (v) map.flyTo([v.coordinates.lat, v.coordinates.lng], 15, { duration: 0.6 });
-  }, [selectedVehicleId]); // eslint-disable-line react-hooks/exhaustive-deps
+    if (selectedLatitude === undefined || selectedLongitude === undefined)
+      return;
+    const position: [number, number] = [selectedLatitude, selectedLongitude];
+    if (previousVehicleId.current !== selectedVehicleId) {
+      map.flyTo(position, 15, { duration: 0.6 });
+      previousVehicleId.current = selectedVehicleId;
+    } else {
+      map.panTo(position, { animate: true, duration: 0.35 });
+    }
+  }, [map, selectedVehicleId, selectedLatitude, selectedLongitude]);
   return null;
 }
 

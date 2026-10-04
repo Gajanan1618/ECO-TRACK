@@ -13,6 +13,7 @@ export default function DriverPage() {
   const [connected, setConnected] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const watchIdRef = useRef<number | null>(null);
+  const watchSessionRef = useRef(0);
   const selectedIdRef = useRef(selectedId);
   const sharingRef = useRef(false);
   const latestPositionRef = useRef<{
@@ -35,12 +36,23 @@ export default function DriverPage() {
       const position = latestPositionRef.current;
       const vehicleId = selectedIdRef.current;
       if (sharingRef.current && position && vehicleId) {
-        socket.emit("driver:update", {
-          vehicleId,
-          lat: position.lat,
-          lng: position.lng,
-          status: "ON_ROUTE",
-        });
+        socket.emit(
+          "driver:update",
+          {
+            vehicleId,
+            lat: position.lat,
+            lng: position.lng,
+            status: "ON_ROUTE",
+          },
+          (result: { status: string; message?: string }) => {
+            if (!sharingRef.current) return;
+            if (result.status === "success") setLastSentAt(Date.now());
+            else
+              setError(
+                result.message || "The server rejected this location update.",
+              );
+          },
+        );
       }
     };
     const onDisconnect = () => setConnected(false);
@@ -48,8 +60,12 @@ export default function DriverPage() {
     socket.on("vehicles:update", onInit);
     socket.on("connect", onConnect);
     socket.on("disconnect", onDisconnect);
-    setConnected(socket.connected);
+    const connectionCheck = window.setTimeout(
+      () => setConnected(socket.connected),
+      0,
+    );
     return () => {
+      window.clearTimeout(connectionCheck);
       socket.off("vehicles:init", onInit);
       socket.off("vehicles:update", onInit);
       socket.off("connect", onConnect);
@@ -65,6 +81,8 @@ export default function DriverPage() {
     return () => {
       if (watchIdRef.current !== null) navigator.geolocation.clearWatch(watchIdRef.current);
       if (sharingRef.current && selectedIdRef.current) {
+        sharingRef.current = false;
+        watchSessionRef.current += 1;
         getSocket().emit("driver:stop", { vehicleId: selectedIdRef.current });
       }
     };
@@ -84,11 +102,18 @@ export default function DriverPage() {
     }
     setError(null);
     const socket = getSocket();
+    const vehicleId = selectedId;
+    const session = ++watchSessionRef.current;
+    latestPositionRef.current = null;
+    setLastCoords(null);
+    setAccuracy(null);
+    setLastSentAt(null);
     selectedIdRef.current = selectedId;
     sharingRef.current = true;
     setSharing(true);
     watchIdRef.current = navigator.geolocation.watchPosition(
       (pos) => {
+        if (!sharingRef.current || watchSessionRef.current !== session) return;
         const coords = {
           lat: pos.coords.latitude,
           lng: pos.coords.longitude,
@@ -97,15 +122,17 @@ export default function DriverPage() {
         latestPositionRef.current = coords;
         setLastCoords(coords);
         setAccuracy(coords.accuracy);
-        socket.emit(
+        socket.volatile.emit(
           "driver:update",
           {
-            vehicleId: selectedId,
+            vehicleId,
             lat: coords.lat,
             lng: coords.lng,
             status: "ON_ROUTE",
           },
           (result: { status: string; message?: string }) => {
+            if (!sharingRef.current || watchSessionRef.current !== session)
+              return;
             if (result.status !== "success")
               setError(
                 result.message || "The server rejected this location update.",
@@ -115,6 +142,7 @@ export default function DriverPage() {
         );
       },
       (err) => {
+        if (!sharingRef.current || watchSessionRef.current !== session) return;
         setError(
           err.code === err.PERMISSION_DENIED
             ? "Location permission was denied. Allow location access in your browser settings and try again."
@@ -124,21 +152,25 @@ export default function DriverPage() {
           navigator.geolocation.clearWatch(watchIdRef.current);
         watchIdRef.current = null;
         sharingRef.current = false;
+        watchSessionRef.current += 1;
         setSharing(false);
-        socket.emit("driver:stop", { vehicleId: selectedId });
+        socket.emit("driver:stop", { vehicleId });
       },
       { enableHighAccuracy: true, maximumAge: 2000, timeout: 10000 },
     );
   };
 
   const stopSharing = () => {
+    sharingRef.current = false;
+    watchSessionRef.current += 1;
     if (watchIdRef.current !== null) {
       navigator.geolocation.clearWatch(watchIdRef.current);
       watchIdRef.current = null;
     }
-    sharingRef.current = false;
     setSharing(false);
-    if (selectedId) getSocket().emit("driver:stop", { vehicleId: selectedId });
+    if (selectedIdRef.current) {
+      getSocket().emit("driver:stop", { vehicleId: selectedIdRef.current });
+    }
   };
 
   const sendReply = () => {

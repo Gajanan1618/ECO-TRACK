@@ -2,11 +2,17 @@ import { formatTimeAgo } from "../utils/formatters";
 
 interface Props {
   usingMock: boolean;
+  locationError?: string | null;
   lastUpdated: number | null;
   vehicleCount: number;
 }
 
-export default function LocationHeader({ usingMock, lastUpdated, vehicleCount }: Props) {
+export default function LocationHeader({
+  usingMock,
+  locationError,
+  lastUpdated,
+  vehicleCount,
+}: Props) {
   return (
     <header className="app-header">
       <div>
@@ -15,7 +21,11 @@ export default function LocationHeader({ usingMock, lastUpdated, vehicleCount }:
           {vehicleCount} vehicles tracked · Updated {formatTimeAgo(lastUpdated)}
         </p>
       </div>
-      {usingMock && <span className="mock-pill">Using mock location (permission denied)</span>}
+      {usingMock && (
+        <span className="mock-pill">
+          Using sample location{locationError ? ` (${locationError})` : ""}
+        </span>
+      )}
     </header>
   );
 }
