@@ -5,6 +5,13 @@ import { Server } from "socket.io";
 import { getAllVehicles, updateVehicle, isValidCoordinates } from "./vehicleStore.js";
 import { addComplaint, resolveComplaint, getAllComplaints } from "./complaintStore.js";
 
+const VEHICLE_STATUSES = new Set([
+  "ON_ROUTE",
+  "IDLE",
+  "MAINTENANCE",
+  "OFFLINE",
+]);
+
 const app = express();
 app.use(cors());
 app.use(express.json());
@@ -23,8 +30,14 @@ app.get("/api/vehicles", (_req, res) => {
 
 app.post("/api/telemetry/location", (req, res) => {
   const { vehicle_id, lat, lng, status } = req.body || {};
-  if (!vehicle_id || !isValidCoordinates(lat, lng)) {
-    return res.status(400).json({ status: "error", message: "Invalid payload" });
+  if (
+    !vehicle_id ||
+    !isValidCoordinates(lat, lng) ||
+    (status && !VEHICLE_STATUSES.has(status))
+  ) {
+    return res
+      .status(400)
+      .json({ status: "error", message: "Invalid payload" });
   }
   const updated = updateVehicle(vehicle_id, { coordinates: { lat, lng }, ...(status && { status }) });
   if (!updated) return res.status(404).json({ status: "error", message: "Vehicle not found" });
@@ -61,15 +74,44 @@ io.on("connection", (socket) => {
   socket.emit("complaints:init", getAllComplaints());
 
   // Driver page sends its live GPS here
-  socket.on("driver:update", (payload) => {
+  socket.on("driver:update", (payload, acknowledge) => {
     const { vehicleId, lat, lng, status } = payload || {};
-    if (!vehicleId || !isValidCoordinates(lat, lng)) return;
+    const respond = typeof acknowledge === "function" ? acknowledge : () => {};
+    if (
+      !vehicleId ||
+      !isValidCoordinates(lat, lng) ||
+      (status && !VEHICLE_STATUSES.has(status))
+    ) {
+      respond({ status: "error", message: "Invalid location update" });
+      return;
+    }
 
     const updated = updateVehicle(vehicleId, {
       coordinates: { lat, lng },
       ...(status && { status }),
     });
-    if (updated) io.emit("vehicles:update", getAllVehicles());
+    if (!updated) {
+      respond({ status: "error", message: "Vehicle not found" });
+      return;
+    }
+    io.emit("vehicles:update", getAllVehicles());
+    respond({ status: "success", lastUpdated: updated.lastUpdated });
+  });
+
+  socket.on("driver:stop", (payload, acknowledge) => {
+    const respond = typeof acknowledge === "function" ? acknowledge : () => {};
+    const { vehicleId } = payload || {};
+    if (!vehicleId) {
+      respond({ status: "error", message: "Vehicle ID is required" });
+      return;
+    }
+    const updated = updateVehicle(vehicleId, { status: "IDLE" });
+    if (!updated) {
+      respond({ status: "error", message: "Vehicle not found" });
+      return;
+    }
+    io.emit("vehicles:update", getAllVehicles());
+    respond({ status: "success" });
   });
 
   // Citizen <-> Driver live text message relay (scoped by vehicleId)

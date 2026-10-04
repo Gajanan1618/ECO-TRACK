@@ -1,8 +1,9 @@
 # EcoTrack (Web Prototype)
 
-A working prototype of a municipal waste-vehicle tracking website: live map,
-simulated GPS movement, nearest-vehicle sorting, status filters, and a
-call-driver action. Built with mock data — no backend, no paid APIs.
+A municipal waste-vehicle tracking prototype with a live map, driver GPS
+sharing, nearest-vehicle sorting, citizen/driver messaging, complaints, and an
+admin fleet view. Driver locations are sent from the device browser to the
+Node.js backend over Socket.IO and broadcast to connected viewers.
 
 ## Tech stack
 
@@ -12,14 +13,26 @@ call-driver action. Built with mock data — no backend, no paid APIs.
 
 ## Run it locally
 
+Start the backend in one terminal:
+
 ```bash
 npm install
 npm run dev
 ```
 
-Open the printed localhost URL. Allow location access for the "nearest
-vehicle" sorting to use your real position (falls back to a mock location
-if you deny it).
+Start the frontend in a second terminal:
+
+```bash
+npm install
+npm run dev
+```
+
+Open the printed localhost URL and allow location access in the Driver Panel.
+Select a vehicle and press **Start Sharing Location**. The citizen and admin
+maps receive each GPS update in real time. GPS access requires user permission
+and a secure browser context (HTTPS, or localhost during local development).
+The frontend uses `http://localhost:4000` by default; set `VITE_SERVER_URL` to
+the deployed backend URL when running against a remote server.
 
 ## Build for production
 
@@ -30,13 +43,12 @@ npm run preview   # serve the built dist/ folder locally
 
 ## What's real vs. simulated
 
-| Feature | This prototype | Full spec (EcoTrack PRD) |
+| Feature | This prototype | Production considerations |
 |---|---|---|
-| Vehicle locations | 5 mock vehicles, randomly nudged every 4s | Real GPS from driver devices via MQTT |
-| Distance/ETA | Haversine formula, client-side | Same formula + OSRM routing engine |
-| Call driver | Opens device dialer via `tel:` link | Twilio/Exotel masked VoIP bridge |
-| Alerts | None yet | Geofence push notifications (FCM) |
-| Backend | None — data folder only | FastAPI + PostgreSQL/PostGIS + Redis |
+| Vehicle locations | Driver browser GPS → Socket.IO → live map updates | Authenticate driver/device identities and persist telemetry |
+| Distance | Haversine formula, client-side | Add road routing/ETA if needed |
+| Driver location | Explicit start/stop controls; status and GPS accuracy shown | Add retention policy and access controls for sensitive location data |
+| Backend | Node.js, Express, Socket.IO; vehicle and complaint data are in memory | Use a persistent database and restrict CORS/origins |
 
 ## Folder structure
 
@@ -44,17 +56,18 @@ npm run preview   # serve the built dist/ folder locally
 src/
 ├── components/   presentation-only UI (VehicleCard, MapView, StatusBadge...)
 ├── data/         mock vehicle data
-├── hooks/        useVehicles (state + simulation), useLocation (geolocation)
-├── services/     locationService, callService — swap these for real APIs later
+├── hooks/        useVehicles (Socket.IO snapshots), useLocation (geolocation)
+├── services/     Socket.IO, geolocation, and call services
 ├── types/        shared TypeScript interfaces
 ├── utils/        distance (Haversine), validation, formatters
 ```
 
-## Next steps to go from prototype -> real system
+## Prototype limitations
 
-1. Replace `data/mockVehicles.ts` with a real API call in `services/`.
-2. Add a backend (FastAPI/Node) with a `/telemetry` endpoint drivers post to.
-3. Swap the simulation interval in `useVehicles` for a WebSocket subscription.
-4. Add Twilio/Exotel only when you actually need masked calling — needs a
-   paid account and a small backend endpoint to bridge two numbers.
-5. Add push notifications (Firebase) once there's a backend to trigger them.
+- The backend starts with sample vehicle records and stores updates in memory;
+   restarting it resets locations and complaints.
+- The current demo does not authenticate driver sockets. Do not expose it as a
+   production tracking service until driver authorization, origin restrictions,
+   and persistent storage are added.
+- Browser GPS sharing runs only while the Driver Panel is open and sharing is
+   enabled. Mobile browsers may suspend tracking when the page is backgrounded.
