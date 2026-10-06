@@ -1,0 +1,23 @@
+# Render Blueprint: BACKEND ONLY (API + websockets). The frontend lives on Netlify.
+services:
+  - type: web
+    name: ecotrack-api
+    runtime: node
+    plan: free
+    rootDir: backend
+    buildCommand: npm ci
+    startCommand: npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: OFFICER_PIN
+        value: "2468"
+      - key: DRIVER_PIN
+        value: "1357"
+      # Set this to your Netlify URL (no trailing slash), e.g. https://ecotrack-demo.netlify.app
+      - key: CORS_ORIGINS
+        value: "*"
+      # Optional: centre the demo on your own city/college (lat,lng)
+      # - key: DEMO_CENTER
+      #   value: "21.0077,75.5626"

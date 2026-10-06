@@ -1,0 +1,14 @@
+# Netlify: deploys only the frontend. The backend runs on Render.
+[build]
+  base    = "frontend"
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+# Single-page app: make /officer, /driver and /citizen work on refresh / direct links
+[[redirects]]
+  from   = "/*"
+  to     = "/index.html"
+  status = 200
