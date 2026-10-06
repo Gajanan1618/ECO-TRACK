@@ -1,0 +1,21 @@
+# Render Blueprint: one web service serves the API, websockets and the built React app.
+services:
+  - type: web
+    name: ecotrack
+    runtime: node
+    plan: free
+    buildCommand: cd frontend && npm ci && npm run build && cd ../backend && npm ci
+    startCommand: cd backend && npm start
+    healthCheckPath: /health
+    envVars:
+      - key: NODE_VERSION
+        value: 22
+      - key: OFFICER_PIN
+        value: "2468"
+      - key: DRIVER_PIN
+        value: "1357"
+      - key: CORS_ORIGINS
+        value: "*"
+      # Optional: centre the demo on your own city/college (lat,lng)
+      # - key: DEMO_CENTER
+      #   value: "21.0077,75.5626"
